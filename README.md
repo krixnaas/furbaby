@@ -2,15 +2,52 @@
 
 A live 3D pet that wanders your desktop (macOS + Windows, Electron + three.js).
 
-## Run
+## Run locally
 
-Needs Node 22+.
+### 1. Prerequisites
+
+- **Node.js 22 or newer** (`node -v` to check). Older versions fail on install.
+  - macOS with Homebrew: `brew install node`
+  - Or with nvm: `nvm install 22 && nvm use 22`
+  - Windows: install the LTS from [nodejs.org](https://nodejs.org)
+- **git**
+
+### 2. Get the code and install
 
 ```bash
+git clone https://github.com/krixnaas/furbaby.git
+cd furbaby
 npm install
-npx electron --version   # first run downloads the Electron binary
+npx electron --version   # one-time: downloads the Electron binary (~100 MB)
+```
+
+### 3. Start it
+
+```bash
 npm start
 ```
+
+The pet appears at the bottom-right of your screen. There's no Dock/taskbar icon:
+**right-click the pet** for everything, including **Quit**. Only one Furbaby runs at a time, so a second
+`npm start` does nothing while one is already running.
+
+### 4. Optional: API keys
+
+Furbaby works without any keys. Two features need one; add them via right-click → *Edit settings…*,
+then *Reload settings*:
+
+| Feature | Setting | Get a key |
+|---|---|---|
+| Chatting with your pet | `apiKey` (or the `ANTHROPIC_API_KEY` environment variable) | [console.anthropic.com](https://console.anthropic.com) |
+| *Make my exact pet in 3D* | `tripoApiKey` | [platform.tripo3d.ai](https://platform.tripo3d.ai) |
+
+### Troubleshooting
+
+- **`npm start` says Electron failed to install** → run `npx electron --version` once, then `npm start` again.
+- **Errors mentioning `import` / syntax on install or start** → your Node is too old; check `node -v` (needs 22+).
+  With nvm, the terminal may still be on an old default: `nvm use 22`.
+- **The pet seems stuck or you've lost it** → quit it from the terminal with `Ctrl+C` and run `npm start` again.
+- **Start fresh** → quit Furbaby and delete its settings folder (see *Settings* below).
 
 ## Use
 
