@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('pet', {
   moveBy: (dx, dy) => ipcRenderer.send('move-by', dx, dy),
   menu: () => ipcRenderer.send('menu'),
   motion: (speed, dir) => ipcRenderer.send('motion', speed, dir),
+  onHold: (fn) => ipcRenderer.on('hold', (_e, on) => fn(on)),
   onTurn: (fn) => ipcRenderer.on('turn', (_e, dir) => fn(dir)),
   rename: (name) => ipcRenderer.send('rename', name),
   dropPhoto: (file) => ipcRenderer.send('photo', webUtils.getPathForFile(file)),

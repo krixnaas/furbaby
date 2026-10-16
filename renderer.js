@@ -4,7 +4,8 @@ const text = document.getElementById('text');
 const chat = document.getElementById('chat');
 
 let state = 'idle', stateTimer, bubbleTimer, wokenAt = 0, autoSlept = false;
-let settings = {}, dir = 1, awaySlept = false; // dir: 1 = moving right, -1 = left
+let settings = {}, dir = 1, awaySlept = false;
+let held = false; // true while its menu, a dialog or the settings file is open: stand still // dir: 1 = moving right, -1 = left
 
 const STATES = ['sit', 'highfive', 'sleep', 'walk', 'trot', 'run', 'hop', 'fly', 'jump', 'spin', 'graze', 'rear'];
 
@@ -55,7 +56,7 @@ const ACTIONS = {
 // Wander: when idle for a moment, pick something to do.
 let nextMoveAt = Date.now() + 3000;
 setInterval(() => {
-  const busy = state !== 'idle' || drag || bubble.classList.contains('typing');
+  const busy = state !== 'idle' || drag || held || bubble.classList.contains('typing');
   if (busy) { nextMoveAt = Date.now() + rand(1500, 4000); return; }
   if (!settings.walk || Date.now() < nextMoveAt) return;
   ACTIONS[pick(kind().moves)]();
@@ -169,6 +170,10 @@ setInterval(checkBedtime, 60_000);
 window.pet.onSay((msg) => { if (state === 'sleep') wake(); happy(); say(msg, 12000); });
 window.pet.onTrick((t) => TRICKS[t]?.());
 window.pet.onTurn(face);
+window.pet.onHold((on) => {
+  held = on;
+  if (on && state !== 'idle' && state !== 'sleep') setState('idle'); // stop where it is
+});
 
 window.pet.settings().then((s) => {
   settings = s;

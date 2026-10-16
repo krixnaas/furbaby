@@ -54,6 +54,8 @@ function createWindow() {
   win.setAlwaysOnTop(true, 'floating');
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   win.loadFile('index.html');
+  win.on('closed', () => { win = null; });
+  win.webContents.on('did-finish-load', sendHold); // a reload resets the page, so tell it again // timers check `win` and stop touching a destroyed window
 }
 
 ipcMain.handle('settings', () => settings);
@@ -76,20 +78,34 @@ ipcMain.handle('model', (_e, type) => {
   return fs.readFileSync(path.join(__dirname, 'models', `${type}.glb`));
 });
 
+// ---------- stay still while you're using its menu, a dialog, or editing settings ----------
+let holds = 0, editingSettings = false;
+const sendHold = () => win?.webContents.send('hold', holds > 0 || editingSettings);
+async function holdWhile(fn) {
+  holds++; sendHold();
+  try { return await fn(); } finally { holds--; sendHold(); }
+}
+const ask = (opts) => holdWhile(() => dialog.showMessageBox(win, opts));
+function editSettings() {
+  editingSettings = true; // cleared by Reload settings (saveSettings)
+  sendHold();
+  shell.openPath(userFile('settings.json'));
+}
+
 // ---------- v2: your exact pet in 3D (Tripo3D) ----------
 let making3D = false;
 async function makeExactPet() {
   if (making3D) return say('Still working on your 3D twin, hang on!');
   if (!settings.tripoApiKey) {
-    const { response } = await dialog.showMessageBox(win, {
+    const { response } = await ask({
       type: 'info', buttons: ['Open settings', 'Cancel'],
       message: 'A Tripo3D API key is needed',
       detail: 'Create one at platform.tripo3d.ai, then paste it into "tripoApiKey" in settings and choose Reload settings.'
     });
-    if (response === 0) shell.openPath(userFile('settings.json'));
+    if (response === 0) editSettings();
     return;
   }
-  const { response } = await dialog.showMessageBox(win, {
+  const { response } = await ask({
     type: 'question', buttons: ['Make it', 'Cancel'], defaultId: 0, cancelId: 1,
     message: 'Turn your photo into a 3D pet?',
     detail: 'Your cut-out photo is sent to Tripo3D. It uses about 65 Tripo credits (roughly $0.65) and takes a few minutes. Four-legged animals get a walk animation; running and jumping are done by Furbaby.'
@@ -144,6 +160,7 @@ setInterval(() => {
 }, 16);
 
 ipcMain.on('menu', () => {
+  holds++; sendHold();
   const trick = (t) => () => win.webContents.send('trick', t);
   Menu.buildFromTemplate([
     { label: 'Sit', click: trick('sit') },
@@ -176,18 +193,18 @@ ipcMain.on('menu', () => {
       click: () => saveSettings({ modelTurn: (settings.modelTurn + 180) % 360 })
     },
     { label: 'Remove photo', visible: !!settings.photo, click: () => saveSettings({ photo: '', customModel: false }) },
-    { label: 'Edit settings…', click: () => shell.openPath(userFile('settings.json')) },
+    { label: 'Edit settings…', click: editSettings },
     { label: 'Reload settings', click: () => saveSettings({}) },
     { label: 'Quit', click: () => app.quit() }
-  ]).popup({ window: win });
+  ]).popup({ window: win, callback: () => { holds--; sendHold(); } });
 });
 
 async function choosePhoto() {
-  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+  const { canceled, filePaths } = await holdWhile(() => dialog.showOpenDialog(win, {
     title: 'Choose a photo of your pet (a PNG with the background removed looks best)',
     filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }],
     properties: ['openFile']
-  });
+  }));
   if (!canceled) setPhoto(filePaths[0]);
 }
 
@@ -215,6 +232,7 @@ ipcMain.on('rename', (_e, name) => name.trim() && saveSettings({ name: name.trim
 function saveSettings(patch) {
   // re-read the file first so hand edits made via "Edit settings…" aren't overwritten
   writeJson(userFile('settings.json'), { ...readJson(userFile('settings.json'), DEFAULTS), ...patch });
+  editingSettings = false;
   loadSettings();
   // resize keeping the pet's bottom-right corner where it is
   const b = win.getBounds(), { width, height } = winSize();
@@ -331,6 +349,9 @@ function loadSettings() {
   system = null;
   startBreaks();
 }
+
+// One pet at a time: a second launch just exits.
+if (!app.requestSingleInstanceLock()) app.exit(0);
 
 app.whenReady().then(() => {
   if (process.platform === 'darwin') app.dock.hide();
