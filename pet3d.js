@@ -63,6 +63,10 @@ function resize() {
 new ResizeObserver(resize).observe(canvas);
 
 // ---------- model ----------
+const pivot = new THREE.Group(); // centred model; scaled for breathing
+holder.add(pivot);
+let turnDeg = 0;
+
 async function load(type) {
   const bytes = await window.pet.model(type); // read by the main process (fetch can't read file:// here)
   const gltf = await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), '');
@@ -76,7 +80,8 @@ async function load(type) {
   model.scale.setScalar(scale);
   const center = box.getCenter(new THREE.Vector3());
   model.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
-  holder.add(model);
+  pivot.rotation.y = THREE.MathUtils.degToRad(turnDeg); // custom models may face another way (menu → Turn around)
+  pivot.add(model);
 
   mixer = new THREE.AnimationMixer(model);
   // Clip names look like "AnimalArmature|Walk" and are sometimes duplicated; keep the first of each.
@@ -89,8 +94,18 @@ async function load(type) {
 
 function play(state) {
   if (!mixer) return; // model still loading
-  const [names, speed, once] = CLIPS[state] || CLIPS.idle;
-  const name = names.find((n) => clips.has(n)) || (clips.has('idle') ? 'idle' : clips.keys().next().value);
+  let [names, speed, once] = CLIPS[state] || CLIPS.idle;
+  // exact clip name, else one containing it (Tripo names clips its own way)
+  const all = [...clips.keys()];
+  let name = names.map((n) => (clips.has(n) ? n : all.find((c) => c.includes(n)))).find(Boolean);
+  if (!name) {
+    // Missing clip (e.g. a Tripo quadruped only has a walk): moves reuse the walk; resting poses freeze it.
+    once = false;
+    if (MOVING.includes(state) || state === 'jump') name = all.find((c) => c.includes('walk')) || all[0];
+    else if (clips.has('idle')) name = 'idle';
+    else { name = all[0]; speed = 0; }
+  }
+  if (!name) return; // model has no animations at all
   const key = `${name}@${speed}`;
   if (key === currentKey && !once) return;
   const action = mixer.clipAction(clips.get(name));
@@ -165,6 +180,8 @@ function frame(now = performance.now()) {
   let target = dir * (MOVING.includes(state) ? Math.PI / 2 : Math.PI / 4);
   if (performance.now() < spinUntil) target += (1 - (spinUntil - performance.now()) / 1000) * Math.PI * 2;
   holder.rotation.y += (target - holder.rotation.y) * Math.min(1, dt * 6);
+  // gentle breathing whenever it isn't on the move
+  pivot.scale.y = MOVING.includes(state) ? 1 : 1 + 0.015 * Math.sin(now / (state === 'sleep' ? 900 : 450));
 
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
@@ -172,8 +189,9 @@ function frame(now = performance.now()) {
 
 window.pet.settings().then(async (s) => {
   try {
+    turnDeg = s.customModel ? s.modelTurn || 0 : 0;
     const model = await load(s.type || 'cat');
-    if (s.photo) {
+    if (s.photo && !s.customModel) { // a model made from the photo already has its real colours
       const colours = await photoColours(s.photo).catch(() => null);
       if (colours) tint(model, colours);
     }

@@ -1,7 +1,7 @@
 {
   "name": "furbaby",
   "productName": "Furbaby",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "A little AI pet that lives on your desktop.",
   "main": "main.js",
   "scripts": {
@@ -16,6 +16,7 @@
       "preload.js",
       "index.html",
       "renderer.js",
+      "tripo.js",
       "pet3d.js",
       "models/**"
     ],

@@ -4,7 +4,7 @@ const text = document.getElementById('text');
 const chat = document.getElementById('chat');
 
 let state = 'idle', stateTimer, bubbleTimer, wokenAt = 0, autoSlept = false;
-let settings = {}, dir = 1; // dir: 1 = moving right, -1 = left
+let settings = {}, dir = 1, awaySlept = false; // dir: 1 = moving right, -1 = left
 
 const STATES = ['sit', 'highfive', 'sleep', 'walk', 'trot', 'run', 'hop', 'fly', 'jump', 'spin', 'graze', 'rear'];
 
@@ -90,6 +90,9 @@ function happy() {
 const TRICKS = {
   sit: () => { setState('sit', 4000); say('*sits nicely*', 2500); },
   jump: ACTIONS.jump,
+  // you've been away 5 min / you're back (from main.js)
+  away: () => { if (state !== 'sleep') { setState('sleep'); awaySlept = true; } },
+  back: () => { if (awaySlept && state === 'sleep') { awaySlept = false; wake(); say('Welcome back! 👋', 4000); } },
   run: ACTIONS.run,
   highfive: () => { setState('highfive', 1500); say('High five! ✋', 2000); },
   sleep: () => (state === 'sleep' ? wake() : setState('sleep')),

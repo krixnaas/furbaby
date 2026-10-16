@@ -1,4 +1,5 @@
-const { app, BrowserWindow, dialog, ipcMain, Menu, Notification, screen, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Menu, Notification, powerMonitor, screen, shell } = require('electron');
+const { makePet3D } = require('./tripo');
 const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
@@ -19,7 +20,10 @@ const DEFAULTS = {
   facing: 'left', // which way the animal in the photo faces; fix with right-click → Turn around
   breakMinutes: 45,
   model: 'claude-opus-5-5',
-  apiKey: '' // empty = use ANTHROPIC_API_KEY from the environment
+  apiKey: '', // empty = use ANTHROPIC_API_KEY from the environment
+  tripoApiKey: '', // Tripo3D key for "Make my exact pet in 3D" (platform.tripo3d.ai)
+  customModel: false, // true = use the 3D model made from your photo
+  modelTurn: 0 // degrees to turn a custom model so it faces the right way
 };
 
 function readJson(file, fallback) {
@@ -67,9 +71,56 @@ setInterval(() => {
   win.setIgnoreMouseEvents(ignoring, { forward: true });
 }, 50);
 ipcMain.handle('model', (_e, type) => {
+  if (settings.customModel && fs.existsSync(userFile('pet-model.glb'))) return fs.readFileSync(userFile('pet-model.glb'));
   if (!PET_TYPES.includes(type)) throw new Error(`unknown pet type ${type}`);
   return fs.readFileSync(path.join(__dirname, 'models', `${type}.glb`));
 });
+
+// ---------- v2: your exact pet in 3D (Tripo3D) ----------
+let making3D = false;
+async function makeExactPet() {
+  if (making3D) return say('Still working on your 3D twin, hang on!');
+  if (!settings.tripoApiKey) {
+    const { response } = await dialog.showMessageBox(win, {
+      type: 'info', buttons: ['Open settings', 'Cancel'],
+      message: 'A Tripo3D API key is needed',
+      detail: 'Create one at platform.tripo3d.ai, then paste it into "tripoApiKey" in settings and choose Reload settings.'
+    });
+    if (response === 0) shell.openPath(userFile('settings.json'));
+    return;
+  }
+  const { response } = await dialog.showMessageBox(win, {
+    type: 'question', buttons: ['Make it', 'Cancel'], defaultId: 0, cancelId: 1,
+    message: 'Turn your photo into a 3D pet?',
+    detail: 'Your cut-out photo is sent to Tripo3D. It uses about 65 Tripo credits (roughly $0.65) and takes a few minutes. Four-legged animals get a walk animation; running and jumping are done by Furbaby.'
+  });
+  if (response !== 0) return;
+
+  making3D = true;
+  try {
+    await makePet3D({
+      apiKey: settings.tripoApiKey,
+      photoPath: userFile('pet-photo.png'),
+      outPath: userFile('pet-model.glb'),
+      onProgress: say
+    });
+    notify('Ta-da! This is the real me now 🎉');
+    saveSettings({ customModel: true, modelTurn: 0 });
+  } catch (err) {
+    console.error(err);
+    notify(`Couldn't make the 3D model: ${err.message}`);
+  } finally {
+    making3D = false;
+  }
+}
+
+// ---------- reacting to you: doze off while you're away, perk up when you're back ----------
+let away = false;
+setInterval(() => {
+  const idle = powerMonitor.getSystemIdleTime(); // seconds since your last keyboard/mouse input
+  if (!away && idle > 300) { away = true; win?.webContents.send('trick', 'away'); }
+  if (away && idle < 5) { away = false; win?.webContents.send('trick', 'back'); }
+}, 5000);
 ipcMain.on('move-by', (_e, dx, dy) => {
   const [x, y] = win.getPosition();
   // pointer deltas can be fractional on Retina screens; setPosition only takes integers
@@ -118,11 +169,13 @@ ipcMain.on('menu', () => {
     },
     { label: settings.name ? `Rename ${settings.name}…` : 'Name your pet…', click: trick('rename') },
     { label: 'Choose pet photo…', click: choosePhoto },
+    { label: 'Make my exact pet in 3D…', enabled: !!settings.photo, click: makeExactPet },
+    { label: 'Use standard 3D model', visible: settings.customModel, click: () => saveSettings({ customModel: false }) },
     {
-      label: 'Turn around', visible: !!settings.photo,
-      click: () => saveSettings({ facing: settings.facing === 'right' ? 'left' : 'right' })
+      label: 'Turn around', visible: settings.customModel,
+      click: () => saveSettings({ modelTurn: (settings.modelTurn + 180) % 360 })
     },
-    { label: 'Use drawn cat', visible: !!settings.photo, click: () => saveSettings({ photo: '' }) },
+    { label: 'Remove photo', visible: !!settings.photo, click: () => saveSettings({ photo: '', customModel: false }) },
     { label: 'Edit settings…', click: () => shell.openPath(userFile('settings.json')) },
     { label: 'Reload settings', click: () => saveSettings({}) },
     { label: 'Quit', click: () => app.quit() }
