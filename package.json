@@ -1,0 +1,44 @@
+{
+  "name": "furbaby",
+  "productName": "Furbaby",
+  "version": "1.0.0",
+  "description": "A little AI pet that lives on your desktop.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win"
+  },
+  "build": {
+    "appId": "local.furbaby",
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "renderer.js",
+      "pet3d.js",
+      "models/**"
+    ],
+    "mac": {
+      "target": "dmg"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "asarUnpack": [
+      "node_modules/@imgly/**",
+      "node_modules/onnxruntime-node/**",
+      "node_modules/sharp/**"
+    ]
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
+    "@imgly/background-removal-node": "^1.4.5",
+    "sharp": "^0.32.6",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "electron": "^44.7.2",
+    "electron-builder": "^26.15.3"
+  }
+}

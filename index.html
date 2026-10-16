@@ -1,0 +1,128 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-Bufz0ylsvH5VX0RelLTkdCzDLj+JPhHmKTdEC0GXlzs='; style-src 'self' 'unsafe-inline'; img-src 'self' file: data: blob:; connect-src 'self' blob:">
+<style>
+  :root { --size: 200px; --fur: #f4a259; --ink: #3b2f2f; }
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; user-select: none;
+    font: 14px/1.35 -apple-system, "Segoe UI", system-ui, sans-serif; }
+
+  #bubble { position: absolute; left: 12px; right: 12px; bottom: calc(var(--size) + 10px); padding: 10px 12px;
+    background: #fff; color: var(--ink); border-radius: 14px; box-shadow: 0 4px 16px #0003;
+    opacity: 0; transform: translateY(6px); transition: .2s; pointer-events: none; }
+  #bubble.show { opacity: 1; transform: none; pointer-events: auto; }
+  #bubble::after { content: ""; position: absolute; bottom: -8px; left: 50%; border: 8px solid transparent;
+    border-bottom: 0; border-top-color: #fff; transform: translateX(-50%); }
+  #chat { display: none; width: 100%; box-sizing: border-box; margin-top: 6px; padding: 6px 8px;
+    border: 1px solid #ddd; border-radius: 8px; font: inherit; }
+  #bubble.typing #chat { display: block; }
+
+  #pet { position: absolute; bottom: 0; left: calc(50% - var(--size) / 2); width: var(--size); height: var(--size); cursor: grab; }
+  #cat { width: 100%; height: 100%; }
+  #zzz, #heart { position: absolute; top: 10px; right: 0; font-size: 24px; color: #6b7cff; pointer-events: none; }
+
+  /* photo pet: same tricks, done with whole-image motion */
+  #photo { display: none; width: 100%; height: 100%; object-fit: contain; transform-origin: 50% 100%;
+    animation: breathe 3s ease-in-out infinite; transition: transform .35s, filter .35s; -webkit-user-drag: none; }
+  .photo #cat { display: none; }
+  .photo #photo { display: block; }
+  .photo.sit #photo { transform: scale(1.05, .92); }
+  .photo.highfive #photo { animation: wiggle .25s 4; }
+  .photo.sleep #photo { transform: rotate(-8deg) translateY(10px); filter: brightness(.75); animation-duration: 6s; }
+  @keyframes wiggle { 25% { transform: rotate(-8deg); } 75% { transform: rotate(8deg); } }
+
+  /* ---- moving around: gaits + actions (photo and drawn cat) ---- */
+  #cat { transform-origin: 50% 100%; }
+  #pet.flip #photo { scale: -1 1; } /* composes with the animated transform */
+  #pet::after { content: ""; position: absolute; left: 15%; right: 15%; bottom: -2px; height: 8%;
+    background: radial-gradient(#0004, transparent 70%); z-index: -1; } /* ground shadow */
+  .walk :is(#photo, #cat) { animation: gait-walk .6s ease-in-out infinite; }
+  .trot :is(#photo, #cat) { animation: gait-trot .36s ease-in-out infinite; }
+  .run :is(#photo, #cat) { animation: gait-run .3s linear infinite; }
+  .hop :is(#photo, #cat) { animation: gait-hop .45s ease-in-out infinite; }
+  .fly :is(#photo, #cat) { animation: gait-fly .7s ease-in-out infinite; }
+  .jump :is(#photo, #cat) { animation: jump .9s ease-in-out; }
+  .spin :is(#photo, #cat) { animation: spin 1s ease-in-out; }
+  .photo.graze #photo { transform: rotate(calc(var(--head) * 7deg)) translateY(3%); }
+  .photo.rear #photo { transform-origin: var(--hind) 100%; transform: rotate(calc(var(--head) * -16deg)); }
+  .run#pet::after, .trot#pet::after { animation: shadow .3s ease-in-out infinite; }
+
+  @keyframes gait-walk { 25% { transform: translateY(-2%) rotate(-1.5deg); } 75% { transform: translateY(-2%) rotate(1.5deg); } }
+  @keyframes gait-trot { 50% { transform: translateY(-6%) rotate(-1.5deg); } }
+  @keyframes gait-run { 0%, 100% { transform: none; } 30% { transform: translateY(-12%) rotate(-5deg); } 65% { transform: translateY(-4%) rotate(4deg); } }
+  @keyframes gait-hop { 50% { transform: translateY(-20%); } }
+  @keyframes gait-fly { 0%, 100% { transform: translateY(-30%) rotate(-3deg); } 50% { transform: translateY(-42%) rotate(3deg); } }
+  @keyframes jump { 15% { transform: scale(1.05, .9); } 50% { transform: translateY(-55%) rotate(-6deg); }
+    85% { transform: scale(1.05, .92); } 100% { transform: none; } }
+  @keyframes spin { to { transform: rotateY(360deg); } }
+  /* 3D mode: the canvas replaces the photo/drawing (the photo still tints the model) */
+  #stage { display: none; width: 100%; height: 100%; }
+  .three #stage { display: block; }
+  .three :is(#photo, #cat) { display: none !important; }
+  .three#pet::after { display: none; }
+  .three.jump #stage { animation: jump3d .9s ease-in-out; }
+  .three.hop #stage { animation: gait-hop .45s ease-in-out infinite; }
+  @keyframes jump3d { 50% { transform: translateY(-35%); } }
+  @keyframes shadow { 50% { transform: scaleX(.85); opacity: .7; } }
+  #pet:active { cursor: grabbing; }
+  .fur { fill: var(--fur); }
+  .dark { fill: var(--ink); }
+  #body { transform-origin: 100px 190px; animation: breathe 3s ease-in-out infinite; }
+  #tail { transform-origin: 145px 165px; animation: wag 1.6s ease-in-out infinite; }
+  #paw { transform-origin: 128px 178px; transition: transform .3s; }
+  #head { transform-origin: 100px 130px; transition: transform .4s; }
+  #eyes-closed, #zzz, #heart { display: none; }
+  .blink #eyes-open { transform: scaleY(.1); transform-origin: 100px 92px; }
+
+  .sit #body { transform: scaleY(1.08); }
+  .sit #head { transform: translateY(-8px); }
+  .highfive #paw { transform: translate(18px, -60px) rotate(-30deg); }
+  .sleep #eyes-open { display: none; }
+  .sleep #eyes-closed, .sleep #zzz { display: inline; }
+  .sleep #head { transform: translateY(14px) rotate(-6deg); }
+  .sleep #body, .sleep #tail { animation-duration: 6s; }
+  .happy { animation: hop .5s ease-out; }
+  .happy #heart { display: inline; animation: float 1s ease-out forwards; }
+  #zzz { animation: float 2.5s ease-out infinite; }
+
+  @keyframes breathe { 50% { transform: scaleY(1.03); } }
+  @keyframes wag { 50% { transform: rotate(14deg); } }
+  @keyframes hop { 40% { transform: translateY(-24px); } }
+  @keyframes float { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-30px); } }
+</style>
+</head>
+<body>
+  <div id="bubble"><div id="text"></div><input id="chat" placeholder="Say something…" maxlength="500"></div>
+
+  <div id="pet" aria-label="Your desktop pet">
+  <img id="photo" alt="">
+  <canvas id="stage"></canvas>
+  <svg id="cat" viewBox="0 0 200 200">
+    <path id="tail" class="fur" d="M140 170 q48 -6 42 -62 q-2 -10 -10 -4 q4 44 -34 52z"/>
+    <g id="body"><ellipse class="fur" cx="100" cy="160" rx="52" ry="34"/>
+      <ellipse fill="#fff8" cx="100" cy="168" rx="30" ry="20"/></g>
+    <ellipse class="fur" cx="72" cy="186" rx="13" ry="8"/>
+    <ellipse id="paw" class="fur" cx="128" cy="186" rx="13" ry="8"/>
+    <g id="head">
+      <path class="fur" d="M62 74 L58 32 L90 58z M138 74 L142 32 L110 58z"/>
+      <path fill="#f7c6c6" d="M66 66 L64 42 L82 58z M134 66 L136 42 L118 58z"/>
+      <circle class="fur" cx="100" cy="94" r="44"/>
+      <g id="eyes-open"><circle class="dark" cx="83" cy="92" r="6"/><circle class="dark" cx="117" cy="92" r="6"/>
+        <circle fill="#fff" cx="85" cy="90" r="2"/><circle fill="#fff" cx="119" cy="90" r="2"/></g>
+      <g id="eyes-closed" stroke="#3b2f2f" stroke-width="3" fill="none" stroke-linecap="round">
+        <path d="M76 94 q7 5 14 0 M110 94 q7 5 14 0"/></g>
+      <path class="dark" d="M95 104 h10 l-5 5z"/>
+      <path d="M100 109 q-6 8 -12 3 M100 109 q6 8 12 3" stroke="#3b2f2f" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <circle fill="#f7a1a1aa" cx="72" cy="108" r="6"/><circle fill="#f7a1a1aa" cx="128" cy="108" r="6"/>
+    </g>
+  </svg>
+  <span id="zzz">z Z</span>
+  <span id="heart">❤️</span>
+  </div>
+
+  <script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","three/addons/":"./node_modules/three/examples/jsm/"}}</script>
+  <script src="renderer.js"></script>
+  <script type="module" src="pet3d.js"></script>
+</body>
+</html>
